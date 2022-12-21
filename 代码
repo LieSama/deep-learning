@@ -1,0 +1,90 @@
+import fasttext # fasttext
+import pandas as pd
+from collections import Counter
+from sklearn.metrics import f1_score
+import matplotlib.pyplot as plt # 可视化
+from keras.models import Sequential
+from keras.layers import Embedding
+from keras.layers import GlobalAveragePooling1D
+from keras.layers import Dense # 使用keras实现FastText网络结构
+
+train_df = pd.read_csv('D:/机器学习数据集/train&test.csv', sep='\t', nrows=100)
+print(train_df.head())
+'''用Pandas完成数据读取的操作:
+ 第一列为新闻的类别，第二列为新闻的字符'''
+
+train_df['text_len'] = train_df['text'].apply(lambda x: len(x.split(' ')))
+print(train_df['text_len'].describe())
+'''句子长度分析：
+赛题数据中每行句子的字符使用空格进行隔开，可以直接统计单词的个数来得到每个句子的长度
+对新闻句子的统计可以得出赛题给定的文本较长，每个句子平均由872个字符构成，最短的句子长度为64，最长的句子长度为7125
+'''
+
+plt.rcParams['font.sans-serif'] = ['SimHei']#解决中文显示乱码问题
+_ = plt.hist(train_df['text_len'], bins=200)
+plt.xlabel('句子长度')
+plt.title("句子长度直方图")
+plt.savefig('./text_chart_count.png')
+plt.show()
+#将句子长度绘制了直方图，可见大部分句子的长度都几种在2000以内
+
+print(' ')
+train_df['label'].value_counts().plot(kind='bar')
+plt.title('新闻类别统计')
+plt.xlabel("类别")
+plt.savefig('./category.png')
+plt.show()
+#对数据集的类别进行分布统计，具体统计每类新闻的样本个数
+
+all_lines = ' '.join(list(train_df['text']))
+word_count = Counter(all_lines.split(" "))
+word_count = sorted(word_count.items(), key=lambda d:d[1], reverse = True)
+print("len(word_count): ", len(word_count))
+print("word_count[0]: ", word_count[0])
+print("word_count[-1]: ", word_count[-1])
+'''字符分布统计:
+统计每个字符出现的次数，首先可以将训练集中所有的句子进行拼接进而划分为字符，并统计每个字符的个数
+从统计结果中可以看出，在训练集中总共包括2405个字，其中编号3750的字出现的次数最多，编号5034的字出现的次数最少
+'''
+
+# 使用keras实现FastText网络结构
+VOCAB_SIZE = 2000
+EMBEDDING_DIM = 100
+MAX_WORDS = 500
+CALSS_NUM = 5
+
+def build_fastText():
+    model = Sequential()
+    # 通过Emdedding层，将词汇映射成EMBEDDING_DIM维向量
+    model.add(Embedding(VOCAB_SIZE, EMBEDDING_DIM, input_length=MAX_WORDS))
+    # 通过GlobalAveragePooling1D，平均文档中所有词的embedding
+    model.add(GlobalAveragePooling1D())
+    # 通过输出层Softmax分类（这里用的是带激活函数为softmax的全连接Dense，真实的fastText是Softmax层,），得到类别概率分布
+    model.add(Dense(CALSS_NUM,activation='softmax'))
+    # 定义损失函数、优化器、分类度量指标
+    model.compile(loss='categorical_crossentropy',optimizer='SGD',metrics=['accuracy'])
+    return model
+
+if __name__ == '__main__':
+    model = build_fastText()
+    print(model.summary())
+
+# 分类模型
+# 转换为FastText需要的格式
+train_df = pd.read_csv('D:/data/train_set.csv',sep='\t',nrows=50000)
+train_df['label_ft'] = '__label__' + train_df['label'].astype(str)
+train_df[['text','label_ft']].iloc[:-10000].to_csv('D:/data/train_fasttext.csv',index=None,header=None,sep='\t')
+
+# 在训练集上选择部分数据训练
+model = fasttext.train_supervised('D:/data/train_fasttext.csv',lr=1.0,wordNgrams=2,verbose=2,minCount=1,epoch=25,loss='hs')
+val_pred = [model.predict(x)[0][0].split('__')[-1] for x in train_df.iloc[-10000:]['text']]
+print(f1_score(train_df['label'].values[-10000:].astype(str),val_pred,average='macro'))
+
+# 在test_a上跑出结果
+test_df = pd.read_csv('D:/data/test_a.csv',sep='\t',nrows=50000)
+val_pred0 = [model.predict(x)[0][0].split('__')[-1] for x in test_df.iloc[:50000]['text']]
+# 写入result.asv文件方便竞赛网站评分
+with open("result.csv","w")as f:
+  f.write("label\n")
+  for p in val_pred0:
+      f.write(f"{p}\n")
