@@ -83,7 +83,7 @@ print(f1_score(train_df['label'].values[-10000:].astype(str),val_pred,average='m
 # 在test_a上跑出结果
 test_df = pd.read_csv('D:/data/test_a.csv',sep='\t',nrows=50000)
 val_pred0 = [model.predict(x)[0][0].split('__')[-1] for x in test_df.iloc[:50000]['text']]
-# 写入result.asv文件方便竞赛网站评分
+# 写入result.csv文件方便竞赛网站评分
 with open("result.csv","w")as f:
   f.write("label\n")
   for p in val_pred0:
